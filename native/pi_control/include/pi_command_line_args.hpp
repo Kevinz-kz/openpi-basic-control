@@ -77,6 +77,7 @@
 #define OPT_FR3_ADDRESS                           "fr3_address"
 #define OPT_FR3_RESET_POSE                        "fr3_reset_pose"
 #define OPT_FR3_FAULT_ACTION                      "fr3_fault_action"
+#define OPT_FR3_LAW                               "fr3_law"
 #define OPT_VERSION                               "version"
 
 // The wheel's version, injected by CMake from SKBUILD_PROJECT_VERSION. A build
@@ -183,6 +184,9 @@ class CommandLineArgs {
     /// What an FR3 control fault does: "stop" ends the session with the arm
     /// where the reflex left it, "home" drives to fr3_reset_pose first.
     std::string fr3_fault_action;
+    /// Path to the FR3 law JSON: gains, limits, torque conditioning and
+    /// collision thresholds. Nothing about the law is compiled in.
+    std::string fr3_law;
     std::string robotiq_transport; ///< Empty, "rtu", or "tcp".
     std::string robotiq_endpoint;  ///< Serial device for RTU or hostname/address for TCP.
     int robotiq_port = 502;        ///< Modbus TCP port.

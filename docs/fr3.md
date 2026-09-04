@@ -131,13 +131,19 @@ with ArmSession() as session:
 
 Policy targets may arrive at a lower frequency while libfranka continues its
 1 kHz torque callback. Position targets remain active until replaced or held.
-The controller retains the ported, tuned hybrid joint/Cartesian impedance
-gains:
 
-- Cartesian stiffness: `400, 400, 400, 15, 15, 15`
-- Cartesian damping: `37, 37, 37, 2, 2, 2`
-- Joint stiffness: `40, 30, 50, 25, 35, 25, 10`
-- Joint damping: `4, 6, 5, 5, 3, 2, 1`
+The law itself lives in one file, `src/openpi_control/models/arms/FR3/FR3_law.json`:
+the joint and Cartesian impedance gains, the joint, velocity and Cartesian
+limits with their soft-limit margins and push-back stiffnesses, the elbow
+velocity check, the torque clamp, libfranka's torque filter cutoff and rate
+limit switch, and the collision thresholds. The node loads it at startup from
+`--fr3_law`, which the Python layer resolves to the packaged file, or to
+`FR3Connection(law_path=...)` for an experiment, and logs the path and joint
+stiffness it loaded. Nothing about the law is compiled in: a simulation that
+reads the same file runs the same law, and a change to the file needs no
+rebuild. The file is read strictly -- every key required, no unknown keys,
+exact array lengths, finite values, every lower bound below its upper bound --
+and a violation stops the node before it touches the arm.
 
 Joint, velocity, Cartesian, torque, collision, owner-liveness, and command
 shape checks remain active. libfranka supplies the robot dynamics and

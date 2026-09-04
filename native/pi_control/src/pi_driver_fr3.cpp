@@ -155,12 +155,13 @@ class ResetMotionGenerator {
     std::array<double, 7> max_goal_acceleration_{5, 5, 5, 5, 5, 5, 5};
 };
 
-void configure_collision_behavior(franka::Robot& robot) {
-    robot.setCollisionBehavior(
-        {{40, 40, 40, 40, 40, 40, 40}}, {{40, 40, 40, 40, 40, 40, 40}},
-        {{40, 40, 40, 40, 40, 40, 40}}, {{40, 40, 40, 40, 40, 40, 40}},
-        {{40, 40, 40, 40, 40, 40}}, {{40, 40, 40, 40, 40, 40}},
-        {{40, 40, 40, 40, 40, 40}}, {{40, 40, 40, 40, 40, 40}});
+void configure_collision_behavior(franka::Robot& robot, const FR3Law& law) {
+    // One threshold per joint and per Cartesian axis, applied to both the
+    // acceleration and the nominal phase and to both bounds, which is how the
+    // ported controller always ran.
+    const auto& torque = law.collision_torque_thresholds;
+    const auto& force = law.collision_force_thresholds;
+    robot.setCollisionBehavior(torque, torque, torque, torque, force, force, force, force);
 }
 
 }  // namespace
@@ -170,7 +171,8 @@ struct DriverFR3::Impl {
 };
 
 DriverFR3::DriverFR3(Device* device, const CommandLineArgs& cla)
-    : Driver(device, cla), cla_(cla), impl_(std::make_unique<Impl>()), controller_({}, limits_),
+    : Driver(device, cla), cla_(cla), impl_(std::make_unique<Impl>()),
+      law_(FR3Law::load(cla.fr3_law)), controller_(law_.gains, law_.limits),
       reset_pose_(parse_array<7>(cla.fr3_reset_pose, "FR3 reset pose")) {}
 
 DriverFR3::~DriverFR3() { close(); }
@@ -199,12 +201,22 @@ ReturnCode DriverFR3::initialize_controller_state() {
 ReturnCode DriverFR3::open(int baud_rate) {
     (void)baud_rate;
     try {
+        {
+            // The log is the record of which law ran: the file can be edited
+            // in place, and --fr3_law can point anywhere.
+            std::ostringstream stiffness;
+            for (size_t i = 0; i < law_.gains.joint_stiffness.size(); ++i) {
+                stiffness << (i ? "," : "") << law_.gains.joint_stiffness[i];
+            }
+            PI_INFO("DriverFR3", InfoLevel::ESSENTIAL_0, "FR3 law %s (joint stiffness %s)",
+                    law_.source.c_str(), stiffness.str().c_str());
+        }
         impl_->robot = std::make_unique<franka::Robot>(cla_.fr3_address, franka::RealtimeConfig::kIgnore);
         // Clear a latched reflex before taking control. Recovery itself moves
         // nothing; without it a connect after any fault throws straight out of
         // robot->control, so the only way back on to the arm was a homing move.
         impl_->robot->automaticErrorRecovery();
-        configure_collision_behavior(*impl_->robot);
+        configure_collision_behavior(*impl_->robot, law_);
         initialize_controller_state();
         const ReturnCode result = start_controller();
         if (result != ReturnCode::SUCCESS) {
@@ -276,7 +288,7 @@ FR3DriverState DriverFR3::state() const {
 
 ReturnCode DriverFR3::set_target(const std::array<double, 7>& target) {
     for (size_t i = 0; i < target.size(); ++i) {
-        if (!std::isfinite(target[i]) || target[i] < limits_.joint_lower[i] || target[i] > limits_.joint_upper[i]) {
+        if (!std::isfinite(target[i]) || target[i] < law_.limits.joint_lower[i] || target[i] > law_.limits.joint_upper[i]) {
             return ReturnCode::INVALID_PARAM;
         }
     }
@@ -300,7 +312,7 @@ ReturnCode DriverFR3::move_to_ready() {
     try {
         impl_->robot = std::make_unique<franka::Robot>(cla_.fr3_address, franka::RealtimeConfig::kIgnore);
         impl_->robot->automaticErrorRecovery();
-        configure_collision_behavior(*impl_->robot);
+        configure_collision_behavior(*impl_->robot, law_);
         ResetMotionGenerator motion_generator(0.2, reset_pose_);
         impl_->robot->control([&](const franka::RobotState& state, franka::Duration period) {
             return motion_generator(state, period);
@@ -395,7 +407,7 @@ void DriverFR3::run_controller() {
                     }
                     return command;
                 },
-                true, 100.0);
+                law_.torque_rate_limit, law_.torque_filter_cutoff_hz);
         }
     } catch (const std::exception& error) {
         std::lock_guard<std::mutex> lock(state_mutex_);

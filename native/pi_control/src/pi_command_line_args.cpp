@@ -172,6 +172,9 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
         OPT_FR3_FAULT_ACTION, po::value<std::string>()->default_value("stop"),
         "What an FR3 control fault does: stop (end the session where the reflex "
         "left the arm) or home (drive to the reset pose first)")(
+        OPT_FR3_LAW, po::value<std::string>()->default_value(""),
+        "FR3 law JSON (gains, limits, torque conditioning, collision thresholds), "
+        "loaded at startup so nothing about the law is compiled in")(
         OPT_VERSION, "Print the node version and exit")(
         OPT_ROBOTIQ_TRANSPORT, po::value<std::string>()->default_value(""),
         "Robotiq transport: rtu or tcp")(
@@ -657,6 +660,7 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
     fr3_address = vm[OPT_FR3_ADDRESS].as<std::string>();
     fr3_reset_pose = vm[OPT_FR3_RESET_POSE].as<std::string>();
     fr3_fault_action = vm[OPT_FR3_FAULT_ACTION].as<std::string>();
+    fr3_law = vm[OPT_FR3_LAW].as<std::string>();
     robotiq_transport = vm[OPT_ROBOTIQ_TRANSPORT].as<std::string>();
     robotiq_endpoint = vm[OPT_ROBOTIQ_ENDPOINT].as<std::string>();
     robotiq_port = vm[OPT_ROBOTIQ_PORT].as<int>();
@@ -702,6 +706,10 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
         if (fr3_fault_action != "stop" && fr3_fault_action != "home") {
             PI_ERROR("--%s must be stop or home, got %s", OPT_FR3_FAULT_ACTION,
                      fr3_fault_action.c_str());
+            exit(2);
+        }
+        if (fr3_law.empty()) {
+            PI_ERROR("FR3 requires --%s", OPT_FR3_LAW);
             exit(2);
         }
         if (!robotiq_transport.empty() && !franka_hand_address.empty()) {

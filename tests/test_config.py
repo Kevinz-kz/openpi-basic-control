@@ -97,6 +97,25 @@ def test_fr3_fault_action_defaults_to_stopping_in_place() -> None:
         FR3Connection("192.168.1.10", fault_action="park")
 
 
+def test_fr3_law_is_the_packaged_file_unless_a_path_overrides_it(tmp_path) -> None:
+    packaged = ArmConfig("follower", "FR3", FR3Connection("192.168.1.10")).resolve_assets()
+    assert packaged.fr3_law is not None
+    assert packaged.fr3_law.name == "FR3_law.json" and packaged.fr3_law.is_file()
+
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(packaged.fr3_law.read_text())
+    overridden = ArmConfig(
+        "follower", "FR3", FR3Connection("192.168.1.10", law_path=candidate)
+    ).resolve_assets()
+    assert overridden.fr3_law == candidate.resolve()
+
+    # A law that is not there is a missing asset, like any other model file.
+    with pytest.raises(ConfigurationError, match="missing model assets"):
+        ArmConfig(
+            "follower", "FR3", FR3Connection("192.168.1.10", law_path=tmp_path / "gone.json")
+        ).resolve_assets()
+
+
 def test_fr3_accepts_the_franka_hand_effector() -> None:
     config = ArmConfig(
         "follower",

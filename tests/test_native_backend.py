@@ -205,6 +205,9 @@ def test_native_backend_forwards_fr3_and_robotiq_arguments(
     assert value_after("--device_model") == "FR3"
     assert value_after("--fr3_address") == "192.168.1.10"
     assert value_after("--fr3_fault_action") == "stop"
+    # The law rides along as the packaged file, which has to exist.
+    law = Path(value_after("--fr3_law"))
+    assert law.name == "FR3_law.json" and law.is_file()
     assert value_after("--robotiq_transport") == expected_transport
     assert value_after("--robotiq_endpoint") == expected_endpoint
     assert value_after("--robotiq_port") == ("1502" if expected_transport == "tcp" else "502")

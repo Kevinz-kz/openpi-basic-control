@@ -10,6 +10,7 @@
 
 #include "pi_driver.hpp"
 #include "pi_fr3_controller.hpp"
+#include "pi_fr3_law.hpp"
 
 struct FR3DriverState {
     uint64_t sequence = 0;
@@ -47,7 +48,7 @@ class DriverFR3 final : public Driver {
     mutable std::mutex state_mutex_;
     mutable std::mutex pending_controller_mutex_;
     FR3DriverState state_;
-    FR3ControllerLimits limits_;
+    FR3Law law_;
     FR3Controller controller_;
     std::array<double, 7> pending_target_{};
     std::array<double, 7> reset_pose_{};

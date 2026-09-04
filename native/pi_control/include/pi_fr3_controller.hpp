@@ -2,26 +2,31 @@
 
 #include <array>
 
+// No values here: the law comes from FR3_law.json through FR3Law, so that the
+// arm and any simulation of it read one file. A zero-initialised instance is
+// not a usable controller.
 struct FR3ControllerGains {
-    std::array<double, 6> cartesian_stiffness{400, 400, 400, 15, 15, 15};
-    std::array<double, 6> cartesian_damping{37, 37, 37, 2, 2, 2};
-    std::array<double, 7> joint_stiffness{40, 30, 50, 25, 35, 25, 10};
-    std::array<double, 7> joint_damping{4, 6, 5, 5, 3, 2, 1};
+    std::array<double, 6> cartesian_stiffness{};
+    std::array<double, 6> cartesian_damping{};
+    std::array<double, 7> joint_stiffness{};
+    std::array<double, 7> joint_damping{};
 };
 
 struct FR3ControllerLimits {
-    std::array<double, 3> cartesian_lower{-1, -1, -1};
-    std::array<double, 3> cartesian_upper{1, 1, 1};
-    std::array<double, 7> joint_lower{-2.65, -1.68, -2.80, -2.95, -2.70, 0.45, -2.90};
-    std::array<double, 7> joint_upper{2.65, 1.68, 2.80, -0.16, 2.70, 4.40, 2.90};
-    std::array<double, 7> velocity{2.075, 2.075, 2.075, 2.075, 2.51, 2.51, 2.51};
-    std::array<double, 7> torque{86, 86, 86, 86, 11.5, 11.5, 11.5};
-    double joint_margin = 0.2;
-    double velocity_margin = 0.5;
-    double cartesian_margin = 0.05;
-    double joint_stiffness = 50;
-    double velocity_stiffness = 20;
-    double cartesian_stiffness = 200;
+    std::array<double, 3> cartesian_lower{};
+    std::array<double, 3> cartesian_upper{};
+    std::array<double, 7> joint_lower{};
+    std::array<double, 7> joint_upper{};
+    std::array<double, 7> velocity{};
+    std::array<double, 7> torque{};
+    double joint_margin = 0.0;
+    double velocity_margin = 0.0;
+    double cartesian_margin = 0.0;
+    double joint_stiffness = 0.0;
+    double velocity_stiffness = 0.0;
+    double cartesian_stiffness = 0.0;
+    // A hard check of its own on the elbow, on top of the joint soft limits.
+    double elbow_velocity = 0.0;
 };
 
 struct FR3ControllerInput {
@@ -36,7 +41,7 @@ struct FR3ControllerInput {
 
 class FR3Controller {
    public:
-    explicit FR3Controller(FR3ControllerGains gains = {}, FR3ControllerLimits limits = {});
+    FR3Controller(FR3ControllerGains gains, FR3ControllerLimits limits);
 
     void set_target(const std::array<double, 7>& target_position);
     void hold(const std::array<double, 7>& measured_position);

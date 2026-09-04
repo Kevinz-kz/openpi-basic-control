@@ -64,7 +64,7 @@ std::array<double, 7> FR3Controller::compute(const FR3ControllerInput& input) {
         }
     }
 
-    if (std::abs(input.elbow_velocity) > 2.075) {
+    if (std::abs(input.elbow_velocity) > limits_.elbow_velocity) {
         throw std::runtime_error("FR3 safety elbow velocity hard limit exceeded");
     }
     std::array<double, 3> cartesian_force{};

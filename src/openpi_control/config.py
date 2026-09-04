@@ -95,12 +95,18 @@ class FR3Connection:
     # client cannot interrupt and which carries whatever is in the gripper
     # along an unplanned path.
     fault_action: str = "stop"
+    # The control law the node loads at startup: gains, limits, torque
+    # conditioning and collision thresholds. None is the packaged
+    # models/arms/FR3/FR3_law.json; a path runs an experiment's law instead.
+    law_path: Path | None = None
 
     def __post_init__(self) -> None:
         try:
             ipaddress.IPv4Address(self.address)
         except ValueError as err:
             raise ConfigurationError(f"invalid FR3 IPv4 address {self.address!r}") from err
+        if self.law_path is not None:
+            object.__setattr__(self, "law_path", Path(self.law_path).expanduser().resolve())
         if self.fault_action not in ("stop", "home"):
             raise ConfigurationError(
                 f"FR3 fault_action must be 'stop' or 'home', got {self.fault_action!r}"
@@ -288,6 +294,8 @@ class ResolvedArmAssets:
     urdf: Path | None
     effector_model_config: Path | None
     effector_instance_config: Path | None
+    # The FR3 control law file the node is told to load; None for other arms.
+    fr3_law: Path | None = None
 
 
 def resolve_model_assets(
@@ -297,6 +305,7 @@ def resolve_model_assets(
     instance_config: Path | None = None,
     effector_instance_config: Path | None = None,
     urdf: Path | None = None,
+    fr3_law: Path | None = None,
 ) -> ResolvedArmAssets:
     """Resolve packaged model files without constructing a hardware connection."""
     if model not in SUPPORTED_MODELS:
@@ -319,9 +328,14 @@ def resolve_model_assets(
         eff_dir = root / "effectors" / effector_model
         eff_model = eff_dir / f"{effector_model}.json"
         eff_instance = effector_instance_config or eff_dir / f"{effector_model}_01.json"
+    law: Path | None = None
+    if model == "FR3":
+        law = Path(fr3_law) if fr3_law is not None else arm_dir / "FR3_law.json"
     required = [model_config, Path(instance)]
     if resolved_urdf is not None:
         required.append(Path(resolved_urdf))
+    if law is not None:
+        required.append(law)
     if eff_model is not None and eff_instance is not None:
         required.extend([eff_model, Path(eff_instance)])
     missing = [str(path) for path in required if not path.is_file()]
@@ -333,6 +347,7 @@ def resolve_model_assets(
         urdf=Path(resolved_urdf) if resolved_urdf is not None else None,
         effector_model_config=eff_model,
         effector_instance_config=Path(eff_instance) if eff_instance else None,
+        fr3_law=law,
     )
 
 
@@ -441,12 +456,16 @@ class ArmConfig:
                 object.__setattr__(self, field_name, Path(value).expanduser().resolve())
 
     def resolve_assets(self) -> ResolvedArmAssets:
+        law_path = (
+            self.connection.law_path if isinstance(self.connection, FR3Connection) else None
+        )
         return resolve_model_assets(
             self.model,
             effector_model=self.effector_model,
             instance_config=self.instance_config,
             effector_instance_config=self.effector_instance_config,
             urdf=self.urdf,
+            fr3_law=law_path,
         )
 
     def input_layout(self) -> InputLayout:

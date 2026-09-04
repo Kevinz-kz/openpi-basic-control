@@ -1,9 +1,27 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "pi_fr3_controller.hpp"
+#include "pi_fr3_law.hpp"
+
+namespace {
+
+// The law the package ships, so these tests never carry a copy of a gain.
+const FR3Law& packaged_law() {
+    static const FR3Law law = FR3Law::load(
+        std::string(OPENPI_CONTROL_SOURCE_DIR) + "/src/openpi_control/models/arms/FR3/FR3_law.json");
+    return law;
+}
+
+FR3Controller make_controller() {
+    return FR3Controller(packaged_law().gains, packaged_law().limits);
+}
+
+}  // namespace
 
 TEST(FR3Controller, HoldsMeasuredPositionUntilFirstCommand) {
-    FR3Controller controller;
+    FR3Controller controller = make_controller();
     FR3ControllerInput input;
     input.q = {0, -0.6, 0, -2.5, 0, 1.8, 0};
     controller.compute(input);
@@ -11,18 +29,18 @@ TEST(FR3Controller, HoldsMeasuredPositionUntilFirstCommand) {
 }
 
 TEST(FR3Controller, PositionCommandUsesTunedImpedanceGains) {
-    FR3Controller controller;
+    FR3Controller controller = make_controller();
     FR3ControllerInput input;
     input.q = {0, -0.6, 0, -2.5, 0, 1.8, 0};
     const std::array<double, 7> target{0.1, -0.6, 0, -2.5, 0, 1.8, 0};
     controller.set_target(target);
     const auto torque = controller.compute(input);
-    EXPECT_NEAR(torque[0], 4.0, 1e-9);
+    EXPECT_NEAR(torque[0], packaged_law().gains.joint_stiffness[0] * 0.1, 1e-9);
     EXPECT_EQ(controller.commanded_position(), target);
 }
 
 TEST(FR3Controller, HoldDiscardsPreviousPositionTarget) {
-    FR3Controller controller;
+    FR3Controller controller = make_controller();
     FR3ControllerInput input;
     input.q = {0, -0.6, 0, -2.5, 0, 1.8, 0};
     controller.set_target({0.1, -0.6, 0, -2.5, 0, 1.8, 0});
@@ -31,7 +49,7 @@ TEST(FR3Controller, HoldDiscardsPreviousPositionTarget) {
 }
 
 TEST(FR3Controller, RejectsHardJointLimitViolations) {
-    FR3Controller controller;
+    FR3Controller controller = make_controller();
     FR3ControllerInput input;
     input.q = {3.0, -0.6, 0, -2.5, 0, 1.8, 0};
     EXPECT_THROW(controller.compute(input), std::runtime_error);

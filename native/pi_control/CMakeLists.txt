@@ -110,6 +110,7 @@ set(COMMON_SOURCES
   src/pi_driver_trossen.cpp
   src/pi_driver_fr3.cpp
   src/pi_fr3_controller.cpp
+  src/pi_fr3_law.cpp
   src/pi_robotiq.cpp
   src/pi_franka_hand.cpp
   # Serial bus-servo stack (protocol-neutral DriverSerial + FeeTech; a future

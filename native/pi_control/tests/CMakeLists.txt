@@ -37,6 +37,7 @@ add_executable(pi_control_tests
   test_servo_dm_status.cpp
   test_driver_base.cpp
   test_fr3_controller.cpp
+  test_fr3_law.cpp
   test_robotiq.cpp
   test_franka_hand.cpp
   ${PI_CONTROL_ROOT}/src/can/math_ops.cpp
@@ -49,8 +50,12 @@ add_executable(pi_control_tests
   ${PI_CONTROL_ROOT}/src/pi_servo_dm_status.cpp
   ${PI_CONTROL_ROOT}/src/pi_info.cpp
   ${PI_CONTROL_ROOT}/src/pi_fr3_controller.cpp
+  ${PI_CONTROL_ROOT}/src/pi_fr3_law.cpp
 )
 target_include_directories(pi_control_tests PRIVATE ${PI_CONTROL_ROOT}/include)
+# The FR3 tests load the packaged law file rather than carrying a copy of it.
+target_compile_definitions(pi_control_tests PRIVATE
+  OPENPI_CONTROL_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_compile_features(pi_control_tests PRIVATE cxx_std_17)
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(pi_control_tests PRIVATE -Wall -Wextra)
