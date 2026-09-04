@@ -22,9 +22,14 @@ endif()
 
 add_compile_definitions(ENABLE_ALGO_PINO)
 
-# --version answers with the wheel's version. scikit-build-core sets
-# SKBUILD_PROJECT_VERSION; a bare cmake build keeps the header's "unknown".
-if(DEFINED SKBUILD_PROJECT_VERSION)
+# --version answers with the wheel's version, which is the point of the flag:
+# an installer has to tell this node from a stock one before running anything.
+# SKBUILD_PROJECT_VERSION is the CMake-compatible form and drops the local
+# version that carries the fork's name, so prefer the full string. A bare cmake
+# build keeps the header's "unknown".
+if(DEFINED SKBUILD_PROJECT_VERSION_FULL)
+  add_compile_definitions(PI_CONTROL_NODE_VERSION="${SKBUILD_PROJECT_VERSION_FULL}")
+elseif(DEFINED SKBUILD_PROJECT_VERSION)
   add_compile_definitions(PI_CONTROL_NODE_VERSION="${SKBUILD_PROJECT_VERSION}")
 endif()
 add_compile_options(-Wall -Wextra -Wpedantic)
