@@ -89,12 +89,21 @@ class FR3Connection:
         1.8849555922,
         0.0,
     )
+    # What a control fault does. "stop" ends the session with the arm where its
+    # own reflex left it; "home" drives to reset_pose_rad first, which the
+    # client cannot interrupt and which carries whatever is in the gripper
+    # along an unplanned path.
+    fault_action: str = "stop"
 
     def __post_init__(self) -> None:
         try:
             ipaddress.IPv4Address(self.address)
         except ValueError as err:
             raise ConfigurationError(f"invalid FR3 IPv4 address {self.address!r}") from err
+        if self.fault_action not in ("stop", "home"):
+            raise ConfigurationError(
+                f"FR3 fault_action must be 'stop' or 'home', got {self.fault_action!r}"
+            )
         pose = tuple(float(value) for value in self.reset_pose_rad)
         if len(pose) != 7 or any(not math.isfinite(value) for value in pose):
             raise ConfigurationError("FR3 reset_pose_rad must contain seven finite joint positions")

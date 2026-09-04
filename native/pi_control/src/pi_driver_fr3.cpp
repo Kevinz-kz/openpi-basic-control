@@ -200,6 +200,10 @@ ReturnCode DriverFR3::open(int baud_rate) {
     (void)baud_rate;
     try {
         impl_->robot = std::make_unique<franka::Robot>(cla_.fr3_address, franka::RealtimeConfig::kIgnore);
+        // Clear a latched reflex before taking control. Recovery itself moves
+        // nothing; without it a connect after any fault throws straight out of
+        // robot->control, so the only way back on to the arm was a homing move.
+        impl_->robot->automaticErrorRecovery();
         configure_collision_behavior(*impl_->robot);
         initialize_controller_state();
         const ReturnCode result = start_controller();

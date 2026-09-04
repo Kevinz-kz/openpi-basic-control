@@ -76,6 +76,14 @@
 #define OPT_PARENT_LIVENESS_FD                    "parent_liveness_fd"
 #define OPT_FR3_ADDRESS                           "fr3_address"
 #define OPT_FR3_RESET_POSE                        "fr3_reset_pose"
+#define OPT_FR3_FAULT_ACTION                      "fr3_fault_action"
+#define OPT_VERSION                               "version"
+
+// The wheel's version, injected by CMake from SKBUILD_PROJECT_VERSION. A build
+// outside scikit-build-core (the native unit tests) reports "unknown".
+#ifndef PI_CONTROL_NODE_VERSION
+#define PI_CONTROL_NODE_VERSION "unknown"
+#endif
 #define OPT_ROBOTIQ_TRANSPORT                     "robotiq_transport"
 #define OPT_ROBOTIQ_ENDPOINT                      "robotiq_endpoint"
 #define OPT_ROBOTIQ_PORT                          "robotiq_port"
@@ -168,6 +176,9 @@ class CommandLineArgs {
     int parent_liveness_fd = -1;  ///< Inherited lifeline pipe; EOF means the Python owner exited.
     std::string fr3_address;       ///< FR3 controller hostname or IP address.
     std::string fr3_reset_pose;    ///< Seven comma-separated reset joint positions (rad).
+    /// What an FR3 control fault does: "stop" ends the session with the arm
+    /// where the reflex left it, "home" drives to fr3_reset_pose first.
+    std::string fr3_fault_action;
     std::string robotiq_transport; ///< Empty, "rtu", or "tcp".
     std::string robotiq_endpoint;  ///< Serial device for RTU or hostname/address for TCP.
     int robotiq_port = 502;        ///< Modbus TCP port.

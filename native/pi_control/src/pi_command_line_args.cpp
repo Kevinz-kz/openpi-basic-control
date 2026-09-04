@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <sstream>
 
 #include <boost/program_options.hpp>
@@ -168,6 +169,10 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
         OPT_FR3_RESET_POSE,
         po::value<std::string>()->default_value("0,-0.785398,0,-2.356194,0,1.570796,0.785398"),
         "Seven comma-separated FR3 reset joint positions in radians")(
+        OPT_FR3_FAULT_ACTION, po::value<std::string>()->default_value("stop"),
+        "What an FR3 control fault does: stop (end the session where the reflex "
+        "left the arm) or home (drive to the reset pose first)")(
+        OPT_VERSION, "Print the node version and exit")(
         OPT_ROBOTIQ_TRANSPORT, po::value<std::string>()->default_value(""),
         "Robotiq transport: rtu or tcp")(
         OPT_ROBOTIQ_ENDPOINT, po::value<std::string>()->default_value(""),
@@ -215,6 +220,14 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
     } catch (const po::error& ex) {
         PI_ERROR("Error parsing command line arguments: %s", ex.what());
         exit(2);
+    }
+
+    if (vm.count(OPT_VERSION)) {
+        // Printed on stdout, not through the info manager: an installer script
+        // reads this to tell one node build from another before it runs
+        // anything, and the info manager is not configured yet.
+        std::printf("%s\n", PI_CONTROL_NODE_VERSION);
+        std::exit(0);
     }
 
     PI_INFO("main()", InfoLevel::ESSENTIAL_0,
@@ -635,6 +648,7 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
     }
     fr3_address = vm[OPT_FR3_ADDRESS].as<std::string>();
     fr3_reset_pose = vm[OPT_FR3_RESET_POSE].as<std::string>();
+    fr3_fault_action = vm[OPT_FR3_FAULT_ACTION].as<std::string>();
     robotiq_transport = vm[OPT_ROBOTIQ_TRANSPORT].as<std::string>();
     robotiq_endpoint = vm[OPT_ROBOTIQ_ENDPOINT].as<std::string>();
     robotiq_port = vm[OPT_ROBOTIQ_PORT].as<int>();
@@ -671,6 +685,11 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
     if (device_model == "FR3") {
         if (role != Role::FOLLOWER || fr3_address.empty()) {
             PI_ERROR("FR3 requires follower role and --%s", OPT_FR3_ADDRESS);
+            exit(2);
+        }
+        if (fr3_fault_action != "stop" && fr3_fault_action != "home") {
+            PI_ERROR("--%s must be stop or home, got %s", OPT_FR3_FAULT_ACTION,
+                     fr3_fault_action.c_str());
             exit(2);
         }
         if (!robotiq_transport.empty()) {

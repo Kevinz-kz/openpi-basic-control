@@ -35,6 +35,19 @@ class DeviceFR3 final : public Device {
     float get_ready_move_completion_ratio() const override { return is_ready_ ? 1.0f : 0.0f; }
 
    private:
+    /*!
+     * @brief Applies the configured fault policy (--fr3_fault_action).
+     *
+     * "home" keeps the inherited behaviour: HARDWARE_FAULT sends the device
+     * into emergency recovery, which drives the arm to the reset pose.
+     * "stop" (the default) parks both transports and ends the session with the
+     * arm where its own reflex left it. A joint-space move to the reset pose
+     * after a collision is not something the client can interrupt -- the node
+     * is blocked inside robot->control for the whole motion -- and it carries
+     * whatever is in the gripper along an unplanned path.
+     */
+    ReturnCode handle_fault();
+
     std::shared_ptr<DriverFR3> driver_fr3_;
     std::unique_ptr<RobotiqTransport> robotiq_;
     float robotiq_default_speed_ = 1.0f;

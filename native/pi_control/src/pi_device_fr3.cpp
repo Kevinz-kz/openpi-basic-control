@@ -121,11 +121,18 @@ ReturnCode DeviceFR3::get_observation(MsgJoints& msg) {
 
 ReturnCode DeviceFR3::process_follower_msg(const MsgJoints& msg) { return apply_action(msg); }
 
+ReturnCode DeviceFR3::handle_fault() {
+    if (cla_.fr3_fault_action != "stop") return ReturnCode::HARDWARE_FAULT;
+    park_safely();
+    if (p_topic_) p_topic_->stop();
+    return ReturnCode::SUCCESS;
+}
+
 ReturnCode DeviceFR3::read_hardware_values() {
     const auto state = driver_fr3_->state();
     if (state.faulted) {
         PI_ERROR("HARDWARE FAULT: %s", state.fault.c_str());
-        return ReturnCode::HARDWARE_FAULT;
+        return handle_fault();
     }
     if (!state.valid) return ReturnCode::NOT_INITIALIZED;
     if (robotiq_) {
@@ -133,7 +140,7 @@ ReturnCode DeviceFR3::read_hardware_values() {
         if (!gripper.connected) return ReturnCode::NO_RESPONSE;
         if (RobotiqTransport::has_operational_fault(gripper)) {
             PI_ERROR("HARDWARE FAULT: Robotiq reported fault 0x%02x", gripper.fault);
-            return ReturnCode::HARDWARE_FAULT;
+            return handle_fault();
         }
     }
     return ReturnCode::SUCCESS;

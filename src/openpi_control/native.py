@@ -412,6 +412,8 @@ class NativeArmBackend(ArmBackend):
                 config.connection.address,
                 "--fr3_reset_pose",
                 ",".join(f"{value:g}" for value in config.connection.reset_pose_rad),
+                "--fr3_fault_action",
+                config.connection.fault_action,
             ]
             # The gripper flags are omitted entirely for an arm-only FR3: the
             # node reads an empty --robotiq_transport as "no effector" and

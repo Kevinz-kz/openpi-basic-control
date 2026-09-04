@@ -89,6 +89,13 @@ def test_fr3_robotiq_still_requires_its_connection() -> None:
         )
 
 
+def test_fr3_fault_action_defaults_to_stopping_in_place() -> None:
+    assert FR3Connection("192.168.1.10").fault_action == "stop"
+    assert FR3Connection("192.168.1.10", fault_action="home").fault_action == "home"
+    with pytest.raises(ConfigurationError, match="fault_action"):
+        FR3Connection("192.168.1.10", fault_action="park")
+
+
 def test_robotiq_supports_true_rtu_and_tcp_endpoints() -> None:
     rtu = RobotiqConnection.rtu("/dev/ttyUSB0", baud_rate=115200)
     tcp = RobotiqConnection.tcp("192.168.1.11", port=502)

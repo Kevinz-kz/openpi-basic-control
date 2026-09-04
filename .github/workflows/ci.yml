@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # franka-hand carries this fork's FR3 changes; it has to be compiled and
+    # tested on every push, not only once a pull request exists.
+    branches: [main, franka-hand]
   pull_request:
 
 concurrency:

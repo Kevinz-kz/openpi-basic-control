@@ -21,6 +21,12 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 add_compile_definitions(ENABLE_ALGO_PINO)
+
+# --version answers with the wheel's version. scikit-build-core sets
+# SKBUILD_PROJECT_VERSION; a bare cmake build keeps the header's "unknown".
+if(DEFINED SKBUILD_PROJECT_VERSION)
+  add_compile_definitions(PI_CONTROL_NODE_VERSION="${SKBUILD_PROJECT_VERSION}")
+endif()
 add_compile_options(-Wall -Wextra -Wpedantic)
 # -Wno-psabi is GCC-only (silences the ARM struct-passing ABI warning).
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

@@ -203,6 +203,7 @@ def test_native_backend_forwards_fr3_and_robotiq_arguments(
 
     assert value_after("--device_model") == "FR3"
     assert value_after("--fr3_address") == "192.168.1.10"
+    assert value_after("--fr3_fault_action") == "stop"
     assert value_after("--robotiq_transport") == expected_transport
     assert value_after("--robotiq_endpoint") == expected_endpoint
     assert value_after("--robotiq_port") == ("1502" if expected_transport == "tcp" else "502")
@@ -239,7 +240,11 @@ def test_native_backend_omits_gripper_arguments_for_an_arm_only_fr3(monkeypatch)
     finally:
         backend.close()
 
-    assert captured_args[captured_args.index("--fr3_address") + 1] == "192.168.1.10"
+    def value_after(option: str) -> str:
+        return captured_args[captured_args.index(option) + 1]
+
+    assert value_after("--fr3_address") == "192.168.1.10"
+    assert value_after("--fr3_fault_action") == "stop"
     assert not [argument for argument in captured_args if argument.startswith("--robotiq")]
     assert "--effector_model" not in captured_args
     assert "--urdf_path" not in captured_args
