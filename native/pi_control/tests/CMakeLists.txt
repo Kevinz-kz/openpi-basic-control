@@ -38,6 +38,7 @@ add_executable(pi_control_tests
   test_driver_base.cpp
   test_fr3_controller.cpp
   test_robotiq.cpp
+  test_franka_hand.cpp
   ${PI_CONTROL_ROOT}/src/can/math_ops.cpp
   ${PI_CONTROL_ROOT}/src/pi_filter.cpp
   ${PI_CONTROL_ROOT}/src/pi_stall_detect.cpp

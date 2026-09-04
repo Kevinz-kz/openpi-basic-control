@@ -11,7 +11,7 @@ Python process via ZeroMQ.
 | --- | --- | --- |
 | `Yam` | `E_Yam` | `E_Yam_Handle` |
 | `ARX_X5` | `E_ARX` | `E_ARX_ENC` |
-| `FR3` | `Robotiq` | — |
+| `FR3` | `Robotiq`, `Franka_hand`, or none | — |
 
 ```python
 from openpi_control import ArmConfig, ArmSession, PositionCommand, SocketCanConnection

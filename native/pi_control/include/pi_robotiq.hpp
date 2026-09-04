@@ -10,6 +10,8 @@
 #include <string>
 #include <thread>
 
+#include "pi_effector_transport.hpp"
+
 enum class RobotiqBackend { RTU, TCP };
 
 struct RobotiqConfig {
@@ -37,16 +39,20 @@ struct RobotiqState {
     uint8_t fault = 0;
 };
 
-class RobotiqTransport {
+class RobotiqTransport final : public EffectorTransport {
    public:
     explicit RobotiqTransport(RobotiqConfig config);
-    ~RobotiqTransport();
+    ~RobotiqTransport() override;
 
-    bool start();
-    void stop();
-    bool activate();
-    void set_target(float position, float speed, float force);
-    void hold();
+    bool start() override;
+    void stop() override;
+    bool activate() override;
+    void set_target(float position, float speed, float force) override;
+    void hold() override;
+    EffectorTransportState effector_state() const override;
+    bool has_effector_fault() const override;
+
+    /*! @brief The Robotiq-specific state, including its register-level fields. */
     RobotiqState state() const;
 
     static uint8_t position_to_raw(float normalized_open, uint8_t open_raw, uint8_t closed_raw) {

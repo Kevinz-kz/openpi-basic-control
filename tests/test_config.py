@@ -8,6 +8,7 @@ from openpi_control import (
     ConfigurationError,
     EthernetConnection,
     FR3Connection,
+    FrankaHandConnection,
     InputLayout,
     RobotiqConnection,
     SafetyLimits,
@@ -94,6 +95,64 @@ def test_fr3_fault_action_defaults_to_stopping_in_place() -> None:
     assert FR3Connection("192.168.1.10", fault_action="home").fault_action == "home"
     with pytest.raises(ConfigurationError, match="fault_action"):
         FR3Connection("192.168.1.10", fault_action="park")
+
+
+def test_fr3_accepts_the_franka_hand_effector() -> None:
+    config = ArmConfig(
+        "follower",
+        "FR3",
+        FR3Connection("192.168.1.10"),
+        effector_model="Franka_hand",
+        effector_connection=FrankaHandConnection(),
+    )
+    assets = config.resolve_assets()
+    assert assets.effector_model_config.name == "Franka_hand.json"
+    assert assets.effector_instance_config.name == "Franka_hand_01.json"
+    # The hand hangs off the arm's own controller, so its address defaults to
+    # the arm's rather than having to be repeated.
+    assert FrankaHandConnection().resolved_address("192.168.1.10") == "192.168.1.10"
+    assert FrankaHandConnection(address="192.168.1.12").resolved_address("192.168.1.10") == (
+        "192.168.1.12"
+    )
+
+
+def test_franka_hand_defaults_position_only_and_does_not_home() -> None:
+    hand = FrankaHandConnection()
+    assert hand.speed_m_s == 0.05
+    assert hand.homing is False
+    with pytest.raises(ConfigurationError, match="speed_m_s"):
+        FrankaHandConnection(speed_m_s=0.0)
+    with pytest.raises(ConfigurationError, match="force_n"):
+        FrankaHandConnection(force_n=-1.0)
+    with pytest.raises(ConfigurationError, match="Franka Hand IPv4"):
+        FrankaHandConnection(address="not-an-address")
+
+
+def test_each_fr3_effector_requires_its_own_connection_type() -> None:
+    with pytest.raises(ConfigurationError, match="requires a FrankaHandConnection"):
+        ArmConfig(
+            "follower",
+            "FR3",
+            FR3Connection("192.168.1.10"),
+            effector_model="Franka_hand",
+            effector_connection=RobotiqConnection.tcp("192.168.1.11"),
+        )
+    with pytest.raises(ConfigurationError, match="requires a RobotiqConnection"):
+        ArmConfig(
+            "follower",
+            "FR3",
+            FR3Connection("192.168.1.10"),
+            effector_model="Robotiq",
+            effector_connection=FrankaHandConnection(),
+        )
+    with pytest.raises(ConfigurationError, match="only supported on FR3"):
+        ArmConfig(
+            "leader",
+            "Yam",
+            SocketCanConnection("can0"),
+            effector_model="Franka_hand",
+            effector_connection=FrankaHandConnection(),
+        )
 
 
 def test_robotiq_supports_true_rtu_and_tcp_endpoints() -> None:

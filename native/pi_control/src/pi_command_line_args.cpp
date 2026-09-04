@@ -195,6 +195,14 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
         "Robotiq speed for position commands, normalized to [0, 1]")(
         OPT_ROBOTIQ_DEFAULT_FORCE, po::value<float>()->default_value(1.0f),
         "Robotiq force for position commands, normalized to [0, 1]")(
+        OPT_FRANKA_HAND_ADDRESS, po::value<std::string>()->default_value(""),
+        "Franka Hand gripper server address; empty unless the hand is the effector")(
+        OPT_FRANKA_HAND_SPEED, po::value<float>()->default_value(0.05f),
+        "Franka Hand finger speed in m/s at full commanded speed")(
+        OPT_FRANKA_HAND_FORCE, po::value<float>()->default_value(20.0f),
+        "Franka Hand grasping force in N; reserved, move() takes no force")(
+        OPT_FRANKA_HAND_HOMING, po::value<bool>()->default_value(false),
+        "Recalibrate the Franka Hand stroke with homing() when the effector activates")(
         OPT_MOVE_TO_READY_VEL_RAD_S_NORMAL,
         po::value<float>()->default_value(MOVE_TO_READY_VEL_RAD_S_NORMAL),
         "Healthy move-to-ready angular speed (rad/s). Used by startup, command-driven "
@@ -660,6 +668,10 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
     robotiq_max_position_raw = vm[OPT_ROBOTIQ_MAX_POSITION_RAW].as<int>();
     robotiq_default_speed = vm[OPT_ROBOTIQ_DEFAULT_SPEED].as<float>();
     robotiq_default_force = vm[OPT_ROBOTIQ_DEFAULT_FORCE].as<float>();
+    franka_hand_address = vm[OPT_FRANKA_HAND_ADDRESS].as<std::string>();
+    franka_hand_speed = vm[OPT_FRANKA_HAND_SPEED].as<float>();
+    franka_hand_force = vm[OPT_FRANKA_HAND_FORCE].as<float>();
+    franka_hand_homing = vm[OPT_FRANKA_HAND_HOMING].as<bool>();
     if (!topic_live_command.empty()) {
         topic_joint = topic_live_command;
     }
@@ -691,6 +703,18 @@ CommandLineArgs::CommandLineArgs(int argc, char** argv) {
             PI_ERROR("--%s must be stop or home, got %s", OPT_FR3_FAULT_ACTION,
                      fr3_fault_action.c_str());
             exit(2);
+        }
+        if (!robotiq_transport.empty() && !franka_hand_address.empty()) {
+            PI_ERROR("--%s and --%s are alternatives; an FR3 has one effector",
+                     OPT_ROBOTIQ_TRANSPORT, OPT_FRANKA_HAND_ADDRESS);
+            exit(2);
+        }
+        if (!franka_hand_address.empty()) {
+            if (!std::isfinite(franka_hand_speed) || franka_hand_speed <= 0.0f ||
+                !std::isfinite(franka_hand_force) || franka_hand_force < 0.0f) {
+                PI_ERROR("Invalid Franka Hand speed or force");
+                exit(2);
+            }
         }
         if (!robotiq_transport.empty()) {
             if ((robotiq_transport != "rtu" && robotiq_transport != "tcp") || robotiq_endpoint.empty()) {

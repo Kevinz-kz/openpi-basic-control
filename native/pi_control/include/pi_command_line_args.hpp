@@ -95,6 +95,10 @@
 #define OPT_ROBOTIQ_MAX_POSITION_RAW              "robotiq_max_position_raw"
 #define OPT_ROBOTIQ_DEFAULT_SPEED                 "robotiq_default_speed"
 #define OPT_ROBOTIQ_DEFAULT_FORCE                 "robotiq_default_force"
+#define OPT_FRANKA_HAND_ADDRESS                   "franka_hand_address"
+#define OPT_FRANKA_HAND_SPEED                     "franka_hand_speed"
+#define OPT_FRANKA_HAND_FORCE                     "franka_hand_force"
+#define OPT_FRANKA_HAND_HOMING                    "franka_hand_homing"
 
 
 // Unified move-to-ready / emergency-recovery options. Every "move to ready" path (startup,
@@ -190,6 +194,13 @@ class CommandLineArgs {
     int robotiq_max_position_raw = 230; ///< Raw register value for fully closed.
     float robotiq_default_speed = 1.0f; ///< Speed used by position-only public commands.
     float robotiq_default_force = 1.0f; ///< Force used by position-only public commands.
+    /// Franka Hand: the gripper server's address, empty when the hand is not
+    /// the configured effector. It is the FR3's own address; the hand shares
+    /// the controller, on a different port from the FCI.
+    std::string franka_hand_address;
+    float franka_hand_speed = 0.05f;   ///< Finger speed (m/s) at full commanded speed.
+    float franka_hand_force = 20.0f;   ///< Reserved: move() positions, it takes no force.
+    bool franka_hand_homing = false;   ///< Recalibrate the stroke on activate().
 
     // Unified move-to-ready / emergency-recovery options. See macros above for descriptions.
     float move_to_ready_vel_rad_s_normal; ///< Healthy move-to-ready angular speed (rad/s).

@@ -1,8 +1,16 @@
-# FR3 and Robotiq control
+# FR3 gripper and effector control
 
-`openpi-control` owns one Franka Emika FR3 and one Robotiq 2F gripper through
-the same `ArmSession` and `FollowerArm` API used by the other follower arms.
-One `pi_control_node` process owns both hardware connections.
+`openpi-control` owns one Franka Emika FR3 and, optionally, one end effector
+through the same `ArmSession` and `FollowerArm` API used by the other follower
+arms. One `pi_control_node` process owns every hardware connection it needs.
+
+Three effector configurations are supported:
+
+| `effector_model` | Connection | Hardware |
+| --- | --- | --- |
+| `"Robotiq"` | `RobotiqConnection.rtu(...)` / `.tcp(...)` | Robotiq 2F over Modbus |
+| `"Franka_hand"` | `FrankaHandConnection(...)` | The FR3's own Franka Hand |
+| `None` | — | Arm only; the node reports seven joints |
 
 ## Requirements
 
@@ -46,6 +54,56 @@ effector_connection=RobotiqConnection.tcp("192.168.1.11", port=502)
 
 The public gripper convention is `0.0 = fully closed` and `1.0 = fully open`.
 Raw Robotiq register calibration defaults to 3 (open) and 230 (closed).
+
+## Franka Hand
+
+The hand hangs off the FR3's own controller, so its address defaults to the
+arm's:
+
+```python
+from openpi_control import ArmConfig, FR3Connection, FrankaHandConnection
+
+config = ArmConfig(
+    "follower",
+    "FR3",
+    FR3Connection("192.168.1.10"),
+    effector_model="Franka_hand",
+    effector_connection=FrankaHandConnection(speed_m_s=0.05),
+)
+```
+
+The same `0.0 = closed`, `1.0 = open` convention applies; the node divides the
+measured finger width by the hand's own `max_width`, so a normalized position
+means the same thing whatever fingers are fitted.
+
+One connection, two threads: a reader blocked in `readOnce()` and a command
+thread running the latest requested width. **The gripper server accepts exactly
+one client**, so no other process may hold a connection to the hand while the
+node runs -- a second connection is refused and takes the first one down with
+it. The state stream runs at roughly 40 Hz at rest and 8 Hz while the fingers
+travel, so a mid-stroke width is a frame or two old.
+
+Fingers stopped by an object on the way closed is how a grasp ends and is not a
+fault; an opening command that never reaches its width is. The node positions
+with `move()`, which takes no force, so `force_n` is reserved for a future
+`grasp()` mode. `homing` is off by default: it recalibrates the stroke but
+sweeps the fingers through their full range, which is not safe to do unattended
+with long fingers fitted. Without homing, `max_width` still comes from the
+hand's own state stream.
+
+## Faults
+
+`fault_action` (`FR3Connection`) decides what a control fault -- a collision
+reflex, a soft joint or velocity limit, the elbow velocity check -- does:
+
+- `"stop"` (default): both transports park and the session ends with the arm
+  where its own reflex left it. Python sees a `HardwareFaultError`.
+- `"home"`: the node drives the arm to `reset_pose_rad` first. That motion
+  cannot be interrupted by the client, and it carries whatever is in the
+  gripper along an unplanned path.
+
+Connecting recovers a latched reflex in place, so a session can be restarted
+after a fault without moving the arm first.
 
 Connecting is passive: the arm holds its measured pose and the gripper is not
 activated. `move_to_ready()` performs internal FR3 error recovery, moves to the

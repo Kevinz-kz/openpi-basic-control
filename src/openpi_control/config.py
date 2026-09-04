@@ -26,6 +26,7 @@ SUPPORTED_MODELS = (
 )
 SUPPORTED_EFFECTORS = (
     "E_ARX",
+    "Franka_hand",
     "E_ARX_ENC",
     "E_SO101",
     "E_Trossen_ctrl",
@@ -169,7 +170,55 @@ class RobotiqConnection:
                 raise ConfigurationError(f"Robotiq {name} must be in [0, 1]")
 
 
+@dataclass(frozen=True, slots=True)
+class FrankaHandConnection:
+    """The FR3's own Franka Hand, reached through its gripper server.
+
+    The gripper server accepts exactly one client, so nothing else may hold a
+    connection to the hand while the native node runs.
+    """
+
+    # The gripper server lives on the FR3 controller. None means "the arm's own
+    # address", which is what every real installation uses.
+    address: str | None = None
+    speed_m_s: float = 0.05
+    # Reserved: the node positions the fingers with move(), which takes no
+    # force. Kept so a grasp() mode can be added without a config change.
+    force_n: float = 20.0
+    # Homing recalibrates the stroke but sweeps the fingers through their full
+    # range, which is not safe to do unattended with long fingers fitted.
+    homing: bool = False
+
+    def __post_init__(self) -> None:
+        if self.address is not None:
+            try:
+                ipaddress.IPv4Address(self.address)
+            except ValueError as err:
+                raise ConfigurationError(
+                    f"invalid Franka Hand IPv4 address {self.address!r}"
+                ) from err
+        if not math.isfinite(self.speed_m_s) or self.speed_m_s <= 0.0:
+            raise ConfigurationError("Franka Hand speed_m_s must be positive")
+        if not math.isfinite(self.force_n) or self.force_n < 0.0:
+            raise ConfigurationError("Franka Hand force_n must be nonnegative")
+        if not isinstance(self.homing, bool):
+            raise ConfigurationError("Franka Hand homing must be a boolean")
+
+    def resolved_address(self, arm_address: str) -> str:
+        """The gripper server address, defaulting to the arm's own."""
+        return self.address or arm_address
+
+
 ArmConnection = SocketCanConnection | EthernetConnection | SerialConnection | FR3Connection
+EffectorConnection = RobotiqConnection | FrankaHandConnection
+
+# The effectors an FR3 can carry, and the connection each one needs. One node
+# owns the arm and its effector together, so they are configured as a pair.
+_FR3_EFFECTOR_CONNECTIONS: dict[str, type] = {
+    "Robotiq": RobotiqConnection,
+    "Franka_hand": FrankaHandConnection,
+}
+FR3_EFFECTORS = tuple(_FR3_EFFECTOR_CONNECTIONS)
 
 
 def connection_for_interface(interface: str) -> ArmConnection:
@@ -296,7 +345,7 @@ class ArmConfig:
     connection: ArmConnection
     instance_config: Path | None = None
     effector_model: str | None = None
-    effector_connection: RobotiqConnection | None = None
+    effector_connection: EffectorConnection | None = None
     effector_instance_config: Path | None = None
     urdf: Path | None = None
     # First contact after the arm has sat idle can exceed a minute of native
@@ -344,14 +393,32 @@ class ArmConfig:
             # An effector is optional on FR3: the arm alone is a complete
             # follower (the native node reports seven joints), which is what a
             # deployment whose gripper is driven by another process needs.
-            if self.effector_model == "Robotiq" and self.effector_connection is None:
-                raise ConfigurationError("the Robotiq effector requires an effector connection")
+            if self.effector_model is not None and self.effector_model not in FR3_EFFECTORS:
+                raise ConfigurationError(
+                    f"FR3 supports the {' and '.join(FR3_EFFECTORS)} effectors, "
+                    f"got {self.effector_model!r}"
+                )
+            if self.effector_model is not None and self.effector_connection is None:
+                raise ConfigurationError(
+                    f"the {self.effector_model} effector requires an effector connection"
+                )
         elif isinstance(self.connection, FR3Connection):
             raise ConfigurationError("FR3Connection can only be used with the FR3 model")
-        if self.effector_model == "Robotiq" and self.model != "FR3":
-            raise ConfigurationError("the Robotiq effector is only supported on FR3")
-        if self.effector_connection is not None and self.effector_model != "Robotiq":
-            raise ConfigurationError("effector_connection is only valid for a Robotiq effector")
+        if self.effector_model in FR3_EFFECTORS and self.model != "FR3":
+            raise ConfigurationError(
+                f"the {self.effector_model} effector is only supported on FR3"
+            )
+        expected_connection = _FR3_EFFECTOR_CONNECTIONS.get(self.effector_model or "")
+        if self.effector_connection is not None and expected_connection is None:
+            raise ConfigurationError(
+                "effector_connection is only valid for an FR3 effector"
+            )
+        if expected_connection is not None and self.effector_connection is not None:
+            if not isinstance(self.effector_connection, expected_connection):
+                raise ConfigurationError(
+                    f"the {self.effector_model} effector requires a "
+                    f"{expected_connection.__name__}"
+                )
         if self.connect_timeout_s <= 0:
             raise ConfigurationError("connect_timeout_s must be positive")
         if self.leader_gravity_compensation is None:

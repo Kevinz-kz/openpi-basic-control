@@ -26,8 +26,10 @@ from .config import (
     ArmConnection,
     EthernetConnection,
     FR3Connection,
+    FrankaHandConnection,
     InputLayout,
     ResolvedArmAssets,
+    RobotiqConnection,
     RobotiqTransport,
     SerialConnection,
 )
@@ -337,7 +339,10 @@ class NativeArmBackend(ArmBackend):
                 if role is not ArmRole.FOLLOWER:
                     raise ConfigurationError("FR3 is supported as a follower only")
                 gripper = config.effector_connection
-                if gripper is not None and gripper.transport is RobotiqTransport.RTU:
+                if (
+                    isinstance(gripper, RobotiqConnection)
+                    and gripper.transport is RobotiqTransport.RTU
+                ):
                     gripper_device = Path(gripper.endpoint)
                     if not gripper_device.exists():
                         raise ConnectionUnavailableError(
@@ -419,7 +424,18 @@ class NativeArmBackend(ArmBackend):
             # node reads an empty --robotiq_transport as "no effector" and
             # reports seven joints.
             gripper = config.effector_connection
-            if gripper is not None:
+            if isinstance(gripper, FrankaHandConnection):
+                connection_args += [
+                    "--franka_hand_address",
+                    gripper.resolved_address(config.connection.address),
+                    "--franka_hand_speed",
+                    f"{gripper.speed_m_s:g}",
+                    "--franka_hand_force",
+                    f"{gripper.force_n:g}",
+                    "--franka_hand_homing",
+                    "true" if gripper.homing else "false",
+                ]
+            elif gripper is not None:
                 connection_args += [
                     "--robotiq_transport",
                     gripper.transport.value,

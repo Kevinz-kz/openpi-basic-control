@@ -4,7 +4,7 @@
 
 #include "pi_device.hpp"
 #include "pi_driver_fr3.hpp"
-#include "pi_robotiq.hpp"
+#include "pi_effector_transport.hpp"
 
 class DeviceFR3 final : public Device {
    public:
@@ -49,7 +49,10 @@ class DeviceFR3 final : public Device {
     ReturnCode handle_fault();
 
     std::shared_ptr<DriverFR3> driver_fr3_;
-    std::unique_ptr<RobotiqTransport> robotiq_;
-    float robotiq_default_speed_ = 1.0f;
-    float robotiq_default_force_ = 1.0f;
+    /// The attached end effector, or null for an arm-only FR3. Either a
+    /// Robotiq over Modbus or the FR3's own Franka Hand; the device only ever
+    /// sees the normalized interface.
+    std::unique_ptr<EffectorTransport> effector_;
+    float effector_default_speed_ = 1.0f;
+    float effector_default_force_ = 1.0f;
 };

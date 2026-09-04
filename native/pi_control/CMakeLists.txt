@@ -106,6 +106,7 @@ set(COMMON_SOURCES
   src/pi_driver_fr3.cpp
   src/pi_fr3_controller.cpp
   src/pi_robotiq.cpp
+  src/pi_franka_hand.cpp
   # Serial bus-servo stack (protocol-neutral DriverSerial + FeeTech; a future
   # Dynamixel port adds pi_driver_dxl.cpp / pi_servo_dxl.cpp here).
   src/pi_driver_serial.cpp
@@ -187,6 +188,7 @@ if(OPENPI_CONTROL_BUILD_TESTING)
     tests/test_command_line_args.cpp
     tests/test_driver_can_mit.cpp
     tests/test_topic_zmq.cpp
+    tests/test_franka_hand_lifecycle.cpp
     ${PI_TOPIC_ZMQ_TEST_SOURCES}
   )
   target_compile_definitions(pi_topic_zmq_tests PRIVATE OPENPI_CONTROL_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

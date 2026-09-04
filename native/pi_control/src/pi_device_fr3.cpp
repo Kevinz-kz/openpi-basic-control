@@ -1,5 +1,8 @@
 #include "pi_device_fr3.hpp"
 
+#include "pi_franka_hand.hpp"
+#include "pi_robotiq.hpp"
+
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -7,7 +10,9 @@
 
 DeviceFR3::DeviceFR3(const CommandLineArgs& cla) : Device(cla) {
     dof_ = 7;
-    dof_total_ = cla.robotiq_transport.empty() ? 7 : 8;
+    const bool has_effector =
+        !cla.robotiq_transport.empty() || !cla.franka_hand_address.empty();
+    dof_total_ = has_effector ? 8 : 7;
     servo_num_ = 7;
     servo_num_total_ = dof_total_;
     type_ = DeviceType::ARM;
@@ -32,9 +37,16 @@ ReturnCode DeviceFR3::init(const CommandLineArgs& cla, int argc, char** argv,
         config.response_timeout_ms = cla.robotiq_timeout_ms;
         config.open_raw = static_cast<uint8_t>(cla.robotiq_min_position_raw);
         config.closed_raw = static_cast<uint8_t>(cla.robotiq_max_position_raw);
-        robotiq_ = std::make_unique<RobotiqTransport>(std::move(config));
-        robotiq_default_speed_ = cla.robotiq_default_speed;
-        robotiq_default_force_ = cla.robotiq_default_force;
+        effector_ = std::make_unique<RobotiqTransport>(std::move(config));
+        effector_default_speed_ = cla.robotiq_default_speed;
+        effector_default_force_ = cla.robotiq_default_force;
+    } else if (!cla.franka_hand_address.empty()) {
+        FrankaHandConfig config;
+        config.address = cla.franka_hand_address;
+        config.speed_m_s = cla.franka_hand_speed;
+        config.force_n = cla.franka_hand_force;
+        config.homing = cla.franka_hand_homing;
+        effector_ = std::make_unique<FrankaHandTransport>(std::move(config));
     }
     return ReturnCode::SUCCESS;
 }
@@ -47,13 +59,14 @@ ReturnCode DeviceFR3::start(int baud_rate) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     if (!driver_fr3_->state().valid) return ReturnCode::NO_RESPONSE;
-    if (robotiq_) {
-        if (!robotiq_->start()) return ReturnCode::NO_RESPONSE;
+    if (effector_) {
+        if (!effector_->start()) return ReturnCode::NO_RESPONSE;
         const auto gripper_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-        while (!robotiq_->state().connected && std::chrono::steady_clock::now() < gripper_deadline) {
+        while (!effector_->effector_state().connected &&
+               std::chrono::steady_clock::now() < gripper_deadline) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
-        if (!robotiq_->state().connected) return ReturnCode::NO_RESPONSE;
+        if (!effector_->effector_state().connected) return ReturnCode::NO_RESPONSE;
     }
     if (cla_.dont_go_to_home_pos) {
         driver_fr3_->hold();
@@ -64,13 +77,13 @@ ReturnCode DeviceFR3::start(int baud_rate) {
 
 ReturnCode DeviceFR3::stop() {
     const ReturnCode result = Device::stop();
-    if (robotiq_) robotiq_->stop();
+    if (effector_) effector_->stop();
     return result;
 }
 
 ReturnCode DeviceFR3::park_safely() {
     if (driver_fr3_) driver_fr3_->hold();
-    if (robotiq_) robotiq_->hold();
+    if (effector_) effector_->hold();
     return ReturnCode::SUCCESS;
 }
 
@@ -82,18 +95,18 @@ ReturnCode DeviceFR3::apply_action(const MsgJoints& msg) {
         if (!std::isfinite(value)) return ReturnCode::INVALID_PARAM;
         target[i] = value;
     }
-    if (robotiq_) {
+    if (effector_) {
         const float position = msg.joints_[7].curr_pos_;
-        const auto gripper = robotiq_->state();
+        const auto gripper = effector_->effector_state();
         if (!std::isfinite(position) || position < 0.0f || position > 1.0f) return ReturnCode::INVALID_PARAM;
         if (!gripper.connected) return ReturnCode::NO_RESPONSE;
-        if (!gripper.activated || RobotiqTransport::has_operational_fault(gripper)) {
+        if (!gripper.activated || effector_->has_effector_fault()) {
             return ReturnCode::HARDWARE_FAULT;
         }
     }
     ReturnCode result = driver_fr3_->set_target(target);
-    if (result == ReturnCode::SUCCESS && robotiq_) {
-        robotiq_->set_target(msg.joints_[7].curr_pos_, robotiq_default_speed_, robotiq_default_force_);
+    if (result == ReturnCode::SUCCESS && effector_) {
+        effector_->set_target(msg.joints_[7].curr_pos_, effector_default_speed_, effector_default_force_);
     }
     return result;
 }
@@ -110,8 +123,8 @@ ReturnCode DeviceFR3::get_observation(MsgJoints& msg) {
         msg.add_joint_info(static_cast<float>(state.q[i]), static_cast<float>(state.dq[i]),
                            static_cast<float>(state.torque[i]), 0.0f, 0.0f, age_ms);
     }
-    if (robotiq_) {
-        const auto gripper = robotiq_->state();
+    if (effector_) {
+        const auto gripper = effector_->effector_state();
         msg.add_joint_info(gripper.position, gripper.velocity, gripper.effort, 0.0f,
                            gripper.current, -1.0f);
         if (!gripper.connected) return ReturnCode::NO_RESPONSE;
@@ -135,11 +148,11 @@ ReturnCode DeviceFR3::read_hardware_values() {
         return handle_fault();
     }
     if (!state.valid) return ReturnCode::NOT_INITIALIZED;
-    if (robotiq_) {
-        const auto gripper = robotiq_->state();
+    if (effector_) {
+        const auto gripper = effector_->effector_state();
         if (!gripper.connected) return ReturnCode::NO_RESPONSE;
-        if (RobotiqTransport::has_operational_fault(gripper)) {
-            PI_ERROR("HARDWARE FAULT: Robotiq reported fault 0x%02x", gripper.fault);
+        if (effector_->has_effector_fault()) {
+            PI_ERROR("HARDWARE FAULT: the effector reported fault 0x%02x", gripper.fault);
             return handle_fault();
         }
     }
@@ -151,23 +164,23 @@ ReturnCode DeviceFR3::write_hardware_values() { return ReturnCode::SUCCESS; }
 ReturnCode DeviceFR3::move_to_ready_position() {
     ReturnCode result = driver_fr3_->move_to_ready();
     if (result != ReturnCode::SUCCESS) return result;
-    if (robotiq_) {
-        if (!robotiq_->state().activated && !robotiq_->activate()) {
+    if (effector_) {
+        if (!effector_->effector_state().activated && !effector_->activate()) {
             driver_fr3_->hold();
             return ReturnCode::HARDWARE_FAULT;
         }
-        robotiq_->set_target(1.0f, robotiq_default_speed_, robotiq_default_force_);
+        effector_->set_target(1.0f, effector_default_speed_, effector_default_force_);
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (std::chrono::steady_clock::now() < deadline) {
-            const auto gripper = robotiq_->state();
+            const auto gripper = effector_->effector_state();
             if (!gripper.connected) {
                 driver_fr3_->hold();
-                robotiq_->hold();
+                effector_->hold();
                 return ReturnCode::NO_RESPONSE;
             }
-            if (RobotiqTransport::has_operational_fault(gripper)) {
+            if (effector_->has_effector_fault()) {
                 driver_fr3_->hold();
-                robotiq_->hold();
+                effector_->hold();
                 return ReturnCode::HARDWARE_FAULT;
             }
             if (gripper.activated && gripper.position >= 0.98f) {
@@ -176,9 +189,9 @@ ReturnCode DeviceFR3::move_to_ready_position() {
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
-        PI_ERROR("FR3 move-to-ready timed out waiting for Robotiq to open");
+        PI_ERROR("FR3 move-to-ready timed out waiting for the effector to open");
         driver_fr3_->hold();
-        robotiq_->hold();
+        effector_->hold();
         return ReturnCode::HARDWARE_FAULT;
     }
     is_ready_ = true;
@@ -206,5 +219,5 @@ ReturnCode DeviceFR3::runtime_hold() {
 
 void DeviceFR3::clear_command_buffers_for_move_to_ready() {
     if (driver_fr3_) driver_fr3_->hold();
-    if (robotiq_) robotiq_->hold();
+    if (effector_) effector_->hold();
 }

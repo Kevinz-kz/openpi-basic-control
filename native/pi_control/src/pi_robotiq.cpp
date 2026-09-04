@@ -95,6 +95,23 @@ RobotiqState RobotiqTransport::state() const {
     return state_;
 }
 
+EffectorTransportState RobotiqTransport::effector_state() const {
+    const RobotiqState robotiq = state();
+    EffectorTransportState effector;
+    effector.connected = robotiq.connected;
+    effector.activated = robotiq.activated;
+    effector.moving = robotiq.moving;
+    effector.position = robotiq.position;
+    effector.velocity = robotiq.velocity;
+    effector.effort = robotiq.effort;
+    effector.current = robotiq.current;
+    effector.target = robotiq.target;
+    effector.fault = robotiq.fault;
+    return effector;
+}
+
+bool RobotiqTransport::has_effector_fault() const { return has_operational_fault(state()); }
+
 void RobotiqTransport::run() {
     auto write_command = [this](uint8_t action, uint8_t position, uint8_t speed, uint8_t force) {
         uint16_t registers[3]{static_cast<uint16_t>(action << 8), position,
