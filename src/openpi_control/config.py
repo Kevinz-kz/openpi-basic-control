@@ -332,8 +332,11 @@ class ArmConfig:
         if self.model == "FR3":
             if not isinstance(self.connection, FR3Connection):
                 raise ConfigurationError("FR3 requires an FR3Connection")
-            if self.effector_model != "Robotiq" or self.effector_connection is None:
-                raise ConfigurationError("FR3 requires a Robotiq effector and connection")
+            # An effector is optional on FR3: the arm alone is a complete
+            # follower (the native node reports seven joints), which is what a
+            # deployment whose gripper is driven by another process needs.
+            if self.effector_model == "Robotiq" and self.effector_connection is None:
+                raise ConfigurationError("the Robotiq effector requires an effector connection")
         elif isinstance(self.connection, FR3Connection):
             raise ConfigurationError("FR3Connection can only be used with the FR3 model")
         if self.effector_model == "Robotiq" and self.model != "FR3":

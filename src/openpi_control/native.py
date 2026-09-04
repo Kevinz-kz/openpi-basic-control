@@ -336,10 +336,9 @@ class NativeArmBackend(ArmBackend):
             if isinstance(config.connection, FR3Connection):
                 if role is not ArmRole.FOLLOWER:
                     raise ConfigurationError("FR3 is supported as a follower only")
-                if config.effector_connection is None:
-                    raise ConfigurationError("FR3 requires a Robotiq effector connection")
-                if config.effector_connection.transport is RobotiqTransport.RTU:
-                    gripper_device = Path(config.effector_connection.endpoint)
+                gripper = config.effector_connection
+                if gripper is not None and gripper.transport is RobotiqTransport.RTU:
+                    gripper_device = Path(gripper.endpoint)
                     if not gripper_device.exists():
                         raise ConnectionUnavailableError(
                             f"Robotiq serial device {str(gripper_device)!r} does not exist"
@@ -408,36 +407,41 @@ class NativeArmBackend(ArmBackend):
         # interface name, the controller IPv4 address for Ethernet drivers, or
         # the tty device path for serial buses (which also need the catalog baud).
         if isinstance(config.connection, FR3Connection):
-            assert config.effector_connection is not None
-            gripper = config.effector_connection
             connection_args = [
                 "--fr3_address",
                 config.connection.address,
                 "--fr3_reset_pose",
                 ",".join(f"{value:g}" for value in config.connection.reset_pose_rad),
-                "--robotiq_transport",
-                gripper.transport.value,
-                "--robotiq_endpoint",
-                gripper.endpoint,
-                "--robotiq_port",
-                str(gripper.port),
-                "--robotiq_baud_rate",
-                str(gripper.baud_rate),
-                "--robotiq_slave_id",
-                str(gripper.slave_id),
-                "--robotiq_poll_frequency",
-                str(gripper.poll_frequency_hz),
-                "--robotiq_timeout_ms",
-                str(round(gripper.timeout_s * 1000)),
-                "--robotiq_min_position_raw",
-                str(gripper.open_position_raw),
-                "--robotiq_max_position_raw",
-                str(gripper.closed_position_raw),
-                "--robotiq_default_speed",
-                f"{gripper.default_speed:g}",
-                "--robotiq_default_force",
-                f"{gripper.default_force:g}",
             ]
+            # The gripper flags are omitted entirely for an arm-only FR3: the
+            # node reads an empty --robotiq_transport as "no effector" and
+            # reports seven joints.
+            gripper = config.effector_connection
+            if gripper is not None:
+                connection_args += [
+                    "--robotiq_transport",
+                    gripper.transport.value,
+                    "--robotiq_endpoint",
+                    gripper.endpoint,
+                    "--robotiq_port",
+                    str(gripper.port),
+                    "--robotiq_baud_rate",
+                    str(gripper.baud_rate),
+                    "--robotiq_slave_id",
+                    str(gripper.slave_id),
+                    "--robotiq_poll_frequency",
+                    str(gripper.poll_frequency_hz),
+                    "--robotiq_timeout_ms",
+                    str(round(gripper.timeout_s * 1000)),
+                    "--robotiq_min_position_raw",
+                    str(gripper.open_position_raw),
+                    "--robotiq_max_position_raw",
+                    str(gripper.closed_position_raw),
+                    "--robotiq_default_speed",
+                    f"{gripper.default_speed:g}",
+                    "--robotiq_default_force",
+                    f"{gripper.default_force:g}",
+                ]
         elif isinstance(config.connection, EthernetConnection):
             connection_args = ["--control_port", config.connection.ip]
         elif isinstance(config.connection, SerialConnection):

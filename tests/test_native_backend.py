@@ -211,6 +211,40 @@ def test_native_backend_forwards_fr3_and_robotiq_arguments(
     assert "--urdf_path" not in captured_args
 
 
+def test_native_backend_omits_gripper_arguments_for_an_arm_only_fr3(monkeypatch) -> None:
+    """An FR3 with no effector spawns the node without any gripper flag.
+
+    The node reads an empty --robotiq_transport as "no effector" and reports
+    seven joints, so the flags must be absent rather than empty.
+    """
+    captured_args: list[str] = []
+    backend = NativeArmBackend()
+    config = ArmConfig("fr3-follower", "FR3", FR3Connection("192.168.1.10"))
+
+    def capture_spawn(args, **_kwargs):
+        captured_args.extend(args)
+        raise RuntimeError("captured native arguments")
+
+    monkeypatch.setattr("openpi_control.native.platform.system", lambda: "Linux")
+    monkeypatch.setattr("openpi_control.native.native_executable", lambda: Path(sys.executable))
+    monkeypatch.setattr("openpi_control.native.subprocess.Popen", capture_spawn)
+
+    try:
+        with pytest.raises(RuntimeError, match="captured native arguments"):
+            backend.connect(
+                config,
+                ArmRole.FOLLOWER,
+                topics_for("fr3-arm-only", "fr3-follower"),
+            )
+    finally:
+        backend.close()
+
+    assert captured_args[captured_args.index("--fr3_address") + 1] == "192.168.1.10"
+    assert not [argument for argument in captured_args if argument.startswith("--robotiq")]
+    assert "--effector_model" not in captured_args
+    assert "--urdf_path" not in captured_args
+
+
 @pytest.mark.parametrize("safety_torque_mode", [False, True])
 def test_native_backend_forwards_safety_torque_mode_only_when_enabled(
     monkeypatch, safety_torque_mode: bool

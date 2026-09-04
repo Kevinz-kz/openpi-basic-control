@@ -64,6 +64,31 @@ def test_fr3_requires_typed_arm_and_gripper_connections() -> None:
         ArmConfig("follower", "FR3", SocketCanConnection("can0"))
 
 
+def test_fr3_accepts_an_arm_only_configuration() -> None:
+    """FR3 without an effector: the node reports seven joints and no gripper.
+
+    The deployment this serves drives its gripper from another process, so the
+    arm alone has to be a complete follower.
+    """
+    config = ArmConfig("follower", "FR3", FR3Connection("192.168.1.10"))
+    assert config.effector_model is None
+    assert config.effector_connection is None
+    assert config.joint_names() == tuple(f"fr3_joint{i}" for i in range(1, 8))
+    assets = config.resolve_assets()
+    assert assets.effector_model_config is None
+    assert assets.effector_instance_config is None
+
+
+def test_fr3_robotiq_still_requires_its_connection() -> None:
+    with pytest.raises(ConfigurationError, match="Robotiq effector requires"):
+        ArmConfig(
+            "follower",
+            "FR3",
+            FR3Connection("192.168.1.10"),
+            effector_model="Robotiq",
+        )
+
+
 def test_robotiq_supports_true_rtu_and_tcp_endpoints() -> None:
     rtu = RobotiqConnection.rtu("/dev/ttyUSB0", baud_rate=115200)
     tcp = RobotiqConnection.tcp("192.168.1.11", port=502)
