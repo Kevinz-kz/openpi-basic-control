@@ -6,8 +6,8 @@
  * @brief One end effector's state, in the units the device layer publishes.
  *
  * ``position`` is normalized: 0 is fully closed and 1 is fully open, whatever
- * the hardware's own units are. Fields a particular effector does not measure
- * stay at zero rather than being invented.
+ * the hardware's own units are. Unmeasured fields retain their documented
+ * defaults rather than being invented.
  */
 struct EffectorTransportState {
     bool connected = false;   ///< The transport is talking to the hardware.
@@ -18,6 +18,7 @@ struct EffectorTransportState {
     float effort = 0.0f;      ///< Effort in the effector's own units, 0 if unmeasured.
     float current = 0.0f;     ///< Motor current (A), 0 if unmeasured.
     float target = 1.0f;      ///< Normalized opening most recently commanded.
+    float frame_age_ms = -1.0f; ///< Age of cached feedback; -1 when untracked.
     uint8_t fault = 0;        ///< Hardware fault code, 0 when healthy.
 };
 

@@ -46,6 +46,8 @@ bool FrankaHandTransport::start() {
         state_.position = width_to_position(initial.width, max_width_);
         state_.target = state_.position;
         target_position_ = state_.position;
+        has_target_ = false;
+        command_generation_ = executed_generation_ = 0;
     } catch (const std::exception& error) {
         PI_ERROR("Failed to open the Franka Hand at %s: %s", config_.address.c_str(), error.what());
         impl_->gripper.reset();
@@ -99,8 +101,14 @@ void FrankaHandTransport::set_target(float position, float speed, float force) {
     // the hand's own; the argument is accepted for interface parity.
     (void)force;
     std::lock_guard<std::mutex> lock(mutex_);
-    target_position_ = std::clamp(position, 0.0f, 1.0f);
-    target_speed_ = std::clamp(speed, 0.0f, 1.0f);
+    if (!running_ || !std::isfinite(position) || !std::isfinite(speed)) return;
+    const float next_position = std::clamp(position, 0.0f, 1.0f);
+    const float next_speed = std::clamp(speed, 0.0f, 1.0f);
+    if (has_target_ && next_position == target_position_ && next_speed == target_speed_) return;
+    target_position_ = next_position;
+    target_speed_ = next_speed;
+    has_target_ = true;
+    state_.target = target_position_;
     ++command_generation_;
     condition_.notify_all();
 }
@@ -110,13 +118,19 @@ void FrankaHandTransport::hold() {
     // Abandons a command that has not started; one already travelling runs to
     // its width, because move() cannot be interrupted from here.
     executed_generation_ = command_generation_;
+    has_target_ = false;
     homing_requested_ = false;
     condition_.notify_all();
 }
 
 EffectorTransportState FrankaHandTransport::effector_state() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return state_;
+    EffectorTransportState state = state_;
+    if (last_read_seconds_ > 0.0) {
+        state.frame_age_ms = static_cast<float>(
+            std::max(0.0, monotonic_seconds() - last_read_seconds_) * 1000.0);
+    }
+    return state;
 }
 
 bool FrankaHandTransport::has_effector_fault() const {
@@ -215,7 +229,12 @@ void FrankaHandTransport::command_loop() {
         }
         std::lock_guard<std::mutex> lock(mutex_);
         state_.moving = false;
-        state_.target = position;
+        // A -> B -> A while A runs cancels B and needs no second move(A).
+        // A closing move stopped short is terminal too; periodic targets must
+        // not turn contact into an unbounded series of close attempts.
+        if (!threw && has_target_ && target_position_ == position && target_speed_ == speed) {
+            executed_generation_ = command_generation_;
+        }
         // Fingers stopped by an object on the way closed is how a grasp ends,
         // not a fault. An opening that never reached its width, or any thrown
         // command, is one.

@@ -126,7 +126,7 @@ ReturnCode DeviceFR3::get_observation(MsgJoints& msg) {
     if (effector_) {
         const auto gripper = effector_->effector_state();
         msg.add_joint_info(gripper.position, gripper.velocity, gripper.effort, 0.0f,
-                           gripper.current, -1.0f);
+                           gripper.current, gripper.frame_age_ms);
         if (!gripper.connected) return ReturnCode::NO_RESPONSE;
     }
     return ReturnCode::SUCCESS;

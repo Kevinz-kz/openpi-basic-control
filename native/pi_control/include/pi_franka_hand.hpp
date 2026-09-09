@@ -85,6 +85,7 @@ class FrankaHandTransport final : public EffectorTransport {
     double last_read_seconds_ = 0.0;
     float target_position_ = 1.0f;
     float target_speed_ = 1.0f;
+    bool has_target_ = false;
     uint64_t command_generation_ = 0;
     uint64_t executed_generation_ = 0;
     bool homing_requested_ = false;

@@ -83,6 +83,25 @@ node runs -- a second connection is refused and takes the first one down with
 it. The state stream runs at roughly 40 Hz at rest and 8 Hz while the fingers
 travel, so a mid-stroke width is a frame or two old.
 
+Franka Hand targets are deduplicated by normalized position and speed. A
+repeated target does not restart `move()`, including after a closing move stops
+short. While a move runs, only the newest pending target is retained; requesting
+the active target again cancels an intervening pending target. New targets do
+not interrupt a running move. `hold()` drops pending targets and clears the
+deduplication latch, allowing an explicit resubmission to retry; an active move
+still runs to completion. These rules are specific to the Franka Hand and do not
+change Robotiq's Modbus writes, hold, speed, force, or closing retries.
+
+The hand's state reports the age of the latest `readOnce()` feedback using the
+existing `frame_age_ms` wire field. Repeated publication of cached feedback
+increases its age. This is time since host reception, not a synchronized sensor
+timestamp. Robotiq continues to report an unknown age (`-1`).
+
+Python `PositionCommand(effector=None)` retains its existing measured-position
+fallback. Callers moving the Franka Hand must therefore repeat the desired
+effector target on subsequent arm frames; the Envora adapter does this
+automatically after its first explicit gripper command.
+
 Fingers stopped by an object on the way closed is how a grasp ends and is not a
 fault; an opening command that never reaches its width is. The node positions
 with `move()`, which takes no force, so `force_n` is reserved for a future
